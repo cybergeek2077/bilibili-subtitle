@@ -2,12 +2,11 @@ import { ASR_RETRY } from '@/consts/const'
 import { ASR_SAMPLE_RATE, bytesToBase64, decodeToPcm16k, encodeWav, splitBySilence, splitFragmentedMp4 } from '@/utils/audioUtil'
 import { textToLines } from '@/utils/asrUtil'
 
-// 探测音频地址的超时(PCDN 节点经常连不上)
-const CONNECT_TIMEOUT = 10 * 1000
-const DOWNLOAD_PART_SIZE = 1024 * 1024
-const DOWNLOAD_CONCURRENCY = 4
-const DOWNLOAD_PART_TIMEOUT = 20 * 1000
-const DOWNLOAD_PART_RETRY = 3
+// 超过这么久没收到数据就认为连接卡住(PCDN 节点经常连不上，源站偶尔也会有连接不出数据)
+const STALL_TIMEOUT = 10 * 1000
+const DOWNLOAD_PART_SIZE = 512 * 1024
+const DOWNLOAD_CONCURRENCY = 6
+const DOWNLOAD_PART_RETRY = 4
 
 export interface AsrJob {
   aid: number
@@ -63,21 +62,44 @@ const getAudioUrls = async (aid: number, cid: number): Promise<string[]> => {
   return sortAudioUrls([audio.baseUrl ?? audio.base_url, ...(audio.backupUrl ?? audio.backup_url ?? [])].filter(Boolean))
 }
 
+const errorMessage = (e: any) => e?.name === 'AbortError' ? '连接超时' : String(e?.message ?? e)
+
 /**
- * 下载一段(含响应体)，超时即放弃
+ * 下载一段：只在连续 STALL_TIMEOUT 没有收到数据时放弃，慢但一直在传的连接不会被误杀
  */
-const fetchBytes = async (url: string, range: string | undefined, timeout: number) => {
+const fetchBytes = async (url: string, range: string) => {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeout)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const arm = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => controller.abort(), STALL_TIMEOUT)
+  }
+  arm()
   try {
     const resp = await fetch(url, {
-      headers: range ? { Range: range } : undefined,
+      headers: { Range: range },
       signal: controller.signal,
     })
-    if (!resp.ok) {
+    if (!resp.ok || resp.body == null) {
       throw new Error(`HTTP ${resp.status}`)
     }
-    return { resp, bytes: new Uint8Array(await resp.arrayBuffer()) }
+    const reader = resp.body.getReader()
+    const chunks: Uint8Array[] = []
+    let length = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      length += value.length
+      arm()
+    }
+    const bytes = new Uint8Array(length)
+    let offset = 0
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset)
+      offset += chunk.length
+    }
+    return { resp, bytes }
   } finally {
     clearTimeout(timer)
   }
@@ -94,7 +116,7 @@ const downloadAudio = async (job: AsrJob, urls: string[], onProgress: (loaded: n
   for (const url of urls) {
     checkCancelled(job)
     try {
-      const { resp, bytes } = await fetchBytes(url, 'bytes=0-0', CONNECT_TIMEOUT)
+      const { resp, bytes } = await fetchBytes(url, 'bytes=0-0')
       const size = parseInt(resp.headers.get('Content-Range')?.split('/')[1] ?? '0')
       if (resp.status === 206 && size > 0) {
         total = size
@@ -108,11 +130,11 @@ const downloadAudio = async (job: AsrJob, urls: string[], onProgress: (loaded: n
       }
     } catch (e) {
       lastError = e
-      console.warn('[ASR] 音频地址不可用', url, e)
+      console.debug('[ASR] 音频地址不可用', url, errorMessage(e))
     }
   }
   if (available.length === 0) {
-    throw new Error('音频下载失败: ' + String(lastError?.message ?? lastError))
+    throw new Error('音频下载失败: ' + errorMessage(lastError))
   }
 
   const result = new Uint8Array(total)
@@ -129,7 +151,7 @@ const downloadAudio = async (job: AsrJob, urls: string[], onProgress: (loaded: n
         // 先在能用的地址上重试一次，再换备用地址
         const url = available[attempt < 2 ? 0 : (attempt - 1) % available.length]
         try {
-          const { bytes } = await fetchBytes(url, `bytes=${start}-${end}`, DOWNLOAD_PART_TIMEOUT)
+          const { bytes } = await fetchBytes(url, `bytes=${start}-${end}`)
           if (bytes.length !== end - start + 1) {
             throw new Error(`长度不符 ${bytes.length}`)
           }
@@ -139,9 +161,9 @@ const downloadAudio = async (job: AsrJob, urls: string[], onProgress: (loaded: n
           break
         } catch (e) {
           if (attempt >= DOWNLOAD_PART_RETRY) {
-            throw new Error('音频下载失败: ' + String((e as any)?.message ?? e))
+            throw new Error(`音频下载失败(第 ${idx + 1} 块): ${errorMessage(e)}`)
           }
-          console.warn(`[ASR] 第 ${idx + 1} 块下载失败，重试`, e)
+          console.debug(`[ASR] 第 ${idx + 1} 块下载失败，重试`, errorMessage(e))
         }
       }
     }
@@ -203,7 +225,7 @@ export const runAsrJob = async (job: AsrJob, callbacks: AsrJobCallbacks): Promis
           break
         } catch (e) {
           lastError = e
-          console.warn(`[ASR] 第 ${idx + 1} 段识别失败(第 ${attempt + 1} 次)`, e)
+          console.debug(`[ASR] 第 ${idx + 1} 段识别失败(第 ${attempt + 1} 次)`, errorMessage(e))
           await sleep(1000 * (attempt + 1) * 2)
         }
       }
