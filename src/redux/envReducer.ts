@@ -60,6 +60,9 @@ interface EnvState {
   desc?: string
   // B站官方 AI 总结
   officialSummary?: OfficialSummary
+
+  // 扩展已重新加载，当前页面需要刷新
+  contextInvalidated?: boolean
 }
 
 const initialState: EnvState = {
@@ -316,6 +319,9 @@ export const slice = createSlice({
     setOfficialSummary: (state, action: PayloadAction<OfficialSummary | undefined>) => {
       state.officialSummary = action.payload
     },
+    setContextInvalidated: (state) => {
+      state.contextInvalidated = true
+    },
     setInputting: (state, action: PayloadAction<boolean>) => {
       state.inputting = action.payload
     },
@@ -365,6 +371,7 @@ export const {
   setAsrStatus,
   setDesc,
   setOfficialSummary,
+  setContextInvalidated,
   addAskInfo,
   delAskInfo,
   mergeAskInfo,

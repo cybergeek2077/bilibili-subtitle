@@ -36,6 +36,7 @@ const Header = (props: {
   const uploadedTranscript = useAppSelector(state => state.env.uploadedTranscript)
   const envData = useAppSelector(state => state.env.envData)
   const asrStatus = useAppSelector(state => state.env.asrStatus)
+  const contextInvalidated = useAppSelector(state => state.env.contextInvalidated)
   const {sendInject} = useMessage(!!envData.sidePanel)
 
   const startAsr = useCallback(() => {
@@ -133,12 +134,13 @@ const Header = (props: {
       <MoreBtn placement={'right-start'}/>
     </div>
     <div className='flex gap-0.5 items-center mr-[16px]'>
-      {asrStatus != null &&
+      {contextInvalidated && <div className='text-xs text-warning'>插件已更新，请刷新页面</div>}
+      {!contextInvalidated && asrStatus != null &&
         <div className='tooltip tooltip-left text-xs desc flex items-center gap-1' data-tip='点击取消' onClick={cancelAsr}>
           <AiOutlineLoading3Quarters className='animate-spin'/>
           {formatAsrStatus(asrStatus)}
         </div>}
-      {asrStatus == null && ((infos == null) || infos.length <= 0
+      {!contextInvalidated && asrStatus == null && ((infos == null) || infos.length <= 0
         ?<div className='text-xs desc'>
           (未找到字幕)
           <button className='btn btn-xs btn-link' onClick={onStartAsr}>语音识别</button>

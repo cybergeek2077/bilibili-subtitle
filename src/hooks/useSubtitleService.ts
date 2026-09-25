@@ -10,6 +10,7 @@ import {
   setSegments,
   setTotalHeight,
   setTempData,
+  setContextInvalidated,
 } from '../redux/envReducer'
 import {EventBusContext} from '../Router'
 import {EVENT_EXPAND, TOTAL_HEIGHT_MAX, TOTAL_HEIGHT_MIN, WORDS_MIN, WORDS_RATE} from '../consts/const'
@@ -19,6 +20,7 @@ import { useMessage } from './useMessageService'
 import { setCurrentTime } from '../redux/currentTimeReducer'
 import { RootState } from '../store'
 import { isAsrConfigured } from '../utils/asrUtil'
+import { isExtensionContextValid } from '../utils/env_util'
 
 /**
  * Service是单例，类似后端的服务概念
@@ -270,14 +272,19 @@ const useSubtitleService = () => {
   }, [data?.body, dispatch, envData, chapters])
 
   // 每0.5秒更新当前视频时间
+  const contextInvalidated = useAppSelector(state => state.env.contextInvalidated)
   useInterval(() => {
+    if (!isExtensionContextValid()) {
+      dispatch(setContextInvalidated())
+      return
+    }
     sendInject(null, 'GET_VIDEO_STATUS', {}).then(status => {
       // 只有当时间发生显著变化时才更新状态（差异大于0.1秒），避免不必要的重新渲染
       if (currentTime == null || Math.abs(status.currentTime - currentTime) > 0.1) {
         dispatch(setCurrentTime(status.currentTime))
       }
-    })
-  }, 500)
+    }).catch(console.debug)
+  }, contextInvalidated ? undefined : 500)
 
   // show translated text in the video
   useEffect(() => {

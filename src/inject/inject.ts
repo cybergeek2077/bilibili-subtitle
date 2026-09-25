@@ -4,6 +4,7 @@ import { InjectMessaging } from '../message'
 import { AsrJob, runAsrJob } from './asr'
 import { ASR_URL_PREFIX, buildAsrInfo, getAsrCacheKey, getAsrConfig, isAsrConfigured } from '@/utils/asrUtil'
 import { signWbi } from '@/utils/wbi'
+import { isExtensionContextValid } from '@/utils/env_util'
 
 const debug = (...args: any[]) => {
   console.debug('[Inject]', ...args)
@@ -530,7 +531,12 @@ const debug = (...args: any[]) => {
   // 初始化injectMessage
   runtime.injectMessaging.init(methods)
 
-  setInterval(() => {
+  const timer = setInterval(() => {
+    // 扩展已重新加载，旧脚本停止工作(新脚本要刷新页面才会注入)
+    if (!isExtensionContextValid()) {
+      clearInterval(timer)
+      return
+    }
     if (!sidePanel) {
       const iframe = document.getElementById(IFRAME_ID) as HTMLIFrameElement | undefined
       if (!iframe || iframe.style.display === 'none') return

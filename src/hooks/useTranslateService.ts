@@ -32,6 +32,8 @@ const useTranslateService = () => {
     }
   }, [autoTranslate, addTaskNow])
 
+  const contextInvalidated = useAppSelector(state => state.env.contextInvalidated)
+
   // 每3秒检测翻译
   useInterval(async () => {
     if (autoTranslate) {
@@ -40,7 +42,7 @@ const useTranslateService = () => {
         await addTask(fetchStartIdx)
       }
     }
-  }, 3000)
+  }, contextInvalidated ? undefined : 3000)
 
   // 每0.5秒检测获取结果
   useInterval(async () => {
@@ -49,7 +51,7 @@ const useTranslateService = () => {
         await getTask(taskId)
       }
     }
-  }, 500)
+  }, contextInvalidated ? undefined : 500)
 }
 
 export default useTranslateService
