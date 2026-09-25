@@ -1,3 +1,17 @@
+## 本 fork：语音识别版
+
+fork 自 [IndieKKY/bilibili-subtitle](https://github.com/IndieKKY/bilibili-subtitle)，在原版基础上增加「语音识别」：视频没有字幕时，下载音频（码率最低的一路）→ 浏览器内解码成 16k 单声道 → 按静音切段 → 并发调用语音识别接口 → 生成带时间的字幕，之后原有的列表、跳转、总结、翻译、提问都能照常使用。
+
+- 入口：字幕列表标题栏「语音识别」按钮（无字幕时），或字幕下拉框里的「语音识别 / 重新语音识别」
+- 配置：选项页「语音识别配置」，支持两种 OpenAI 兼容协议，可一键填充阿里百炼 qwen3-asr-flash、硅基流动 SenseVoice、OpenAI/Groq Whisper、本地服务
+  - `/audio/transcriptions`：Whisper 类接口，可选 verbose_json 分句时间戳
+  - `/chat/completions` + `input_audio`：qwen3-asr-flash 等
+- 识别结果按视频缓存在 `chrome.storage.local`，刷新后直接作为「语音识别」字幕出现
+- 没有分句时间戳的接口，按字数在每段内估算时间（段长默认 30 秒）
+- B站官方 AI 总结：登录状态下自动获取（`view/conclusion/get`，WBI 签名），显示在列表顶部，提纲时间点可点击跳转
+- 总结提示词改为中文，加入视频简介（`{{desc}}`），篇幅按视频时长缩放；「总结」输出分节的 Markdown 详细总结
+- 构建：`pnpm install && pnpm build`，在扩展管理页开启开发者模式，「加载已解压的扩展程序」选择 `dist` 目录
+
 ## ⚠️维护说明
 🙏感谢大家的支持，此开源版本将不再更新，仅进行bug修复！
 新的扩展进行升级后，改名为vCaptions，支持任意网站视频添加字幕列表，应用商店链接不变。

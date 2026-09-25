@@ -42,7 +42,7 @@ export const PROMPT_TYPES = [{
 export const SUMMARIZE_TYPES = {
   brief: {
     name: '总结',
-    desc: '一句话总结',
+    desc: '详细总结',
     downloadName: '💡视频总结💡',
     promptType: PROMPT_TYPE_SUMMARIZE_BRIEF,
   },
@@ -83,67 +83,78 @@ video subtitles:
 \`\`\`
 {{subtitles}}
 \`\`\``,
-  [PROMPT_TYPE_SUMMARIZE_OVERVIEW]: `You are a helpful assistant that summarize key points of video subtitle.
-Summarize 3 to 8 brief key points in language '{{language}}'.
-Answer in markdown json format.
-The emoji should be related to the key point and 1 char length.
+  [PROMPT_TYPE_SUMMARIZE_OVERVIEW]: `你是一位擅长整理视频内容的编辑。请按时间顺序提炼下面这段视频字幕的关键节点，使用语言 '{{language}}'。
 
-example output format:
+要求：
+- 覆盖整段内容，从开头到结尾都要有节点，大约每 1~2 分钟一个（这段约 {{minutes}} 分钟，建议 {{count}} 个左右，内容密集可以更多）。
+- key 用 1~2 句话写清楚这一段具体讲了什么：保留关键论点、数据、例子、结论等信息，不要写「介绍了……」「讲述了……」这种空话。
+- time 取字幕里这部分内容开始处的时间戳，格式与字幕一致（MM:SS 或 HH:MM:SS）。
+- emoji 与该节点内容相关，只用 1 个。
+- 广告口播不要展开，用一个节点简短注明即可（emoji 用 📢）。
+- 字幕可能由语音识别生成，含有同音错字，请结合上下文理解，输出时用正确的写法。
+- 只输出 JSON，放在 markdown 代码块里。
+
+输出格式示例：
 
 \`\`\`json
 [
   {
     "time": "03:00",
     "emoji": "👍",
-    "key": "key point 1"
-  },
-  {
-    "time": "10:05",
-    "emoji": "😊",
-    "key": "key point 2"
+    "key": "节点内容"
   }
 ]
 \`\`\`
 
-The video's title: '''{{title}}'''.
-The video's subtitles:
+视频标题：{{title}}
+视频简介：{{desc}}
+
+字幕：
 
 '''
 {{subtitles}}
 '''`,
-  [PROMPT_TYPE_SUMMARIZE_KEYPOINT]: `You are a helpful assistant that summarize key points of video subtitle.
-Summarize brief key points in language '{{language}}'.
-Answer in markdown json format.
+  [PROMPT_TYPE_SUMMARIZE_KEYPOINT]: `你是一位擅长整理视频内容的编辑。请从下面的视频字幕中提炼要点，使用语言 '{{language}}'。
 
-example output format:
+要求：
+- 列出视频中所有重要的观点、知识点、结论、方法步骤和关键数据，按视频中出现的顺序排列，数量根据信息量决定（这段约 {{minutes}} 分钟，一般 {{keypointCount}} 条左右）。
+- 每条是一个完整、具体的句子，读者不看视频也能明白；需要时写出原因、条件或例子。
+- 不要写「视频介绍了……」这类空泛的概括；忽略求三连、广告等与主题无关的内容。
+- 字幕可能由语音识别生成，含有同音错字，请结合上下文理解，输出时用正确的写法。
+- 只输出 JSON 字符串数组，放在 markdown 代码块里。
+
+输出格式示例：
 
 \`\`\`json
 [
-  "key point 1",
-  "key point 2"
+  "要点 1",
+  "要点 2"
 ]
 \`\`\`
 
-The video's title: '''{{title}}'''.
-The video's subtitles:
+视频标题：{{title}}
+视频简介：{{desc}}
+
+字幕：
 
 '''
 {{segment}}
 '''`,
-  [PROMPT_TYPE_SUMMARIZE_BRIEF]: `You are a helpful assistant that summarize video subtitle.
-Summarize in language '{{language}}'.
-Answer in markdown json format.
+  [PROMPT_TYPE_SUMMARIZE_BRIEF]: `你是一位擅长整理视频内容的编辑。请根据下面的视频信息和字幕，写一份详细的视频总结，使用语言 '{{language}}'。
 
-example output format:
+要求：
+- 开头用一段话（2~4 句）概括视频的核心内容和结论。
+- 然后按视频的逻辑顺序分成若干小节，每节用「### 小标题」开头，下面用列表写具体内容：关键论点、论据、数据、例子、步骤、人名和产品名等细节都要保留，不要只写空泛的概括。
+- 如果视频有明确的观点、建议或结论，最后单独用「### 结论与观点」小节列出。
+- 篇幅与信息量相称，一般在 {{minWords}} 字左右，内容多时可以更长。
+- 字幕可能由语音识别生成，含有同音错字，请结合上下文理解，输出时用正确的写法。
+- 忽略求三连、互动引导等无关内容；如果有广告口播，不要展开，只在最后用一行注明「含广告：xxx」。
+- 直接输出 Markdown 正文，不要用代码块包裹，不要输出 JSON。
 
-\`\`\`json
-{
-  "summary": "brief summary"
-}
-\`\`\`
+视频标题：{{title}}
+视频简介：{{desc}}
 
-The video's title: '''{{title}}'''.
-The video's subtitles:
+字幕：
 
 '''
 {{segment}}
@@ -153,6 +164,7 @@ The video's subtitles:
 ## Context
 
 The video's title: '''{{title}}'''.
+The video's description: '''{{desc}}'''.
 The video's subtitles:
 
 '''
@@ -193,6 +205,7 @@ Provide an example to illustrate the expected output:
 ## Context
 
 The video's title: '''{{title}}'''.
+The video's description: '''{{desc}}'''.
 The video's subtitles:
 
 '''
@@ -228,6 +241,7 @@ Provide an example to illustrate the expected output:
 Answer in language '{{language}}'.
 
 The video's title: '''{{title}}'''.
+The video's description: '''{{desc}}'''.
 The video's subtitles:
 
 '''
@@ -267,6 +281,84 @@ export const SUMMARIZE_THRESHOLD = 100
 export const SUMMARIZE_LANGUAGE_DEFAULT = 'cn'
 export const SUMMARIZE_ALL_THRESHOLD = 5
 export const ASK_ENABLED_DEFAULT = true
+export const ASR_CHUNK_SECONDS_DEFAULT = 30
+export const ASR_CONCURRENCY_DEFAULT = 3
+export const ASR_LANGUAGE_DEFAULT = 'zh'
+export const ASR_RETRY = 2
+export const ASR_LANGUAGES = [
+  { code: '', name: '自动' },
+  { code: 'zh', name: '中文' },
+  { code: 'en', name: '英文' },
+  { code: 'ja', name: '日文' },
+  { code: 'ko', name: '韩文' },
+  { code: 'yue', name: '粤语' },
+]
+export const ASR_PRESETS: Array<{
+  name: string
+  desc: string
+  keyUrl?: string
+  protocol: AsrProtocol
+  serverUrl: string
+  model: string
+  timestamps: boolean
+  chunkSeconds: number
+  concurrency: number
+  prompt?: string
+  extraBody?: string
+}> = [{
+  name: '阿里百炼 qwen3-asr-flash',
+  desc: '约 ¥0.8/小时，中文准确率高，视频标题会作为上下文帮助识别专有名词',
+  keyUrl: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
+  protocol: 'chat',
+  serverUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  model: 'qwen3-asr-flash',
+  timestamps: false,
+  chunkSeconds: 30,
+  concurrency: 5,
+  prompt: '视频标题：{{title}}',
+  extraBody: '{"asr_options": {"enable_itn": true}}',
+}, {
+  name: '硅基流动 SenseVoice',
+  desc: '免费模型，速度快',
+  keyUrl: 'https://cloud.siliconflow.cn/account/ak',
+  protocol: 'transcriptions',
+  serverUrl: 'https://api.siliconflow.cn/v1',
+  model: 'FunAudioLLM/SenseVoiceSmall',
+  timestamps: false,
+  chunkSeconds: 30,
+  concurrency: 3,
+}, {
+  name: 'OpenAI Whisper',
+  desc: '返回分句时间戳',
+  keyUrl: 'https://platform.openai.com/api-keys',
+  protocol: 'transcriptions',
+  serverUrl: 'https://api.openai.com/v1',
+  model: 'whisper-1',
+  timestamps: true,
+  chunkSeconds: 300,
+  concurrency: 3,
+  prompt: '以下是简体中文普通话的句子。{{title}}',
+}, {
+  name: 'Groq Whisper',
+  desc: '有免费额度，返回分句时间戳',
+  keyUrl: 'https://console.groq.com/keys',
+  protocol: 'transcriptions',
+  serverUrl: 'https://api.groq.com/openai/v1',
+  model: 'whisper-large-v3-turbo',
+  timestamps: true,
+  chunkSeconds: 300,
+  concurrency: 2,
+  prompt: '以下是简体中文普通话的句子。{{title}}',
+}, {
+  name: '本地 / 自建服务',
+  desc: 'faster-whisper-server、speaches 等提供 OpenAI 兼容接口的服务',
+  protocol: 'transcriptions',
+  serverUrl: 'http://localhost:8000/v1',
+  model: '',
+  timestamps: true,
+  chunkSeconds: 120,
+  concurrency: 2,
+}]
 export const DEFAULT_SERVER_URL_OPENAI = 'https://api.openai.com'
 export const DEFAULT_SERVER_URL_GEMINI = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 export const CUSTOM_MODEL_TOKENS = 16385

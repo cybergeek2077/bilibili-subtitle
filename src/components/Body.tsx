@@ -39,6 +39,7 @@ import Ask from './Ask'
 import { v4 } from 'uuid'
 import RateExtension from '../components/RateExtension'
 import ApiKeyReminder from './ApiKeyReminder'
+import OfficialSummary from './OfficialSummary'
 import { useMessaging } from '../message'
 
 const Body = () => {
@@ -283,6 +284,9 @@ const Body = () => {
         height: `${totalHeight - HEADER_HEIGHT - TITLE_HEIGHT - (showSearchInput ? SEARCH_BAR_HEIGHT : 0)}px`
       }}
     >
+      {/* B站官方 AI 总结 */}
+      <OfficialSummary/>
+
       {/* asks */}
       {asks.map(ask => <Ask key={ask.id} ask={ask} />)}
 

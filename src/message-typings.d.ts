@@ -26,7 +26,11 @@ interface ExtensionGetTabIdMessage extends ExtensionMessage<{ show: boolean }> {
   method: 'GET_TAB_ID'
 }
 
-export type AllExtensionMessages = ExtensionGetTabIdMessage | ExtensionCloseSidePanelMessage | ExtensionAddTaskMessage | ExtensionGetTaskMessage | ExtensionShowFlagMessage
+interface ExtensionAsrTranscribeMessage extends ExtensionMessage<{ config: AsrConfig, audio: string, prompt?: string }, AsrResult> {
+  method: 'ASR_TRANSCRIBE'
+}
+
+export type AllExtensionMessages = ExtensionGetTabIdMessage | ExtensionCloseSidePanelMessage | ExtensionAddTaskMessage | ExtensionGetTaskMessage | ExtensionShowFlagMessage | ExtensionAsrTranscribeMessage
 
 // inject
 interface InjectToggleDisplayMessage extends InjectMessage<{}> {
@@ -73,15 +77,35 @@ interface InjectDownloadAudioMessage extends InjectMessage<{}> {
   method: 'DOWNLOAD_AUDIO'
 }
 
-export type AllInjectMessages = InjectToggleDisplayMessage | InjectFoldMessage | InjectMoveMessage | InjectGetSubtitleMessage | InjectGetVideoStatusMessage | InjectGetVideoElementInfoMessage | InjectRefreshVideoInfoMessage | InjectUpdateTransResultMessage | InjectHideTransMessage | InjectPlayMessage | InjectDownloadAudioMessage
+interface InjectAsrStartMessage extends InjectMessage<{}> {
+  method: 'ASR_START'
+}
+
+interface InjectAsrCancelMessage extends InjectMessage<{}> {
+  method: 'ASR_CANCEL'
+}
+
+export type AllInjectMessages = InjectToggleDisplayMessage | InjectFoldMessage | InjectMoveMessage | InjectGetSubtitleMessage | InjectGetVideoStatusMessage | InjectGetVideoElementInfoMessage | InjectRefreshVideoInfoMessage | InjectUpdateTransResultMessage | InjectHideTransMessage | InjectPlayMessage | InjectDownloadAudioMessage | InjectAsrStartMessage | InjectAsrCancelMessage
 
 // app
 interface AppSetInfosMessage extends AppMessage<{ infos: any }> {
   method: 'SET_INFOS'
 }
 
-interface AppSetVideoInfoMessage extends AppMessage<{ url: string, title: string, aid: number | null, ctime: number | null, author?: string, pages: any, chapters: any, infos: any }> {
+interface AppSetVideoInfoMessage extends AppMessage<{ url: string, title: string, aid: number | null, ctime: number | null, author?: string, pages: any, chapters: any, infos: any, desc?: string }> {
   method: 'SET_VIDEO_INFO'
 }
 
-export type AllAPPMessages = AppSetInfosMessage | AppSetVideoInfoMessage
+interface AppAsrProgressMessage extends AppMessage<{ status: AsrStatus }> {
+  method: 'ASR_PROGRESS'
+}
+
+interface AppAsrDoneMessage extends AppMessage<{ info: any }> {
+  method: 'ASR_DONE'
+}
+
+interface AppSetOfficialSummaryMessage extends AppMessage<{ result: OfficialSummary }> {
+  method: 'SET_OFFICIAL_SUMMARY'
+}
+
+export type AllAPPMessages = AppSetInfosMessage | AppSetVideoInfoMessage | AppAsrProgressMessage | AppAsrDoneMessage | AppSetOfficialSummaryMessage

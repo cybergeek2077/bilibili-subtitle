@@ -1,4 +1,4 @@
-import {IoIosArrowUp} from 'react-icons/all'
+import {AiOutlineLoading3Quarters, IoIosArrowUp} from 'react-icons/all'
 import {useCallback} from 'react'
 import {useAppDispatch, useAppSelector} from '../hooks/redux'
 import {find, remove} from 'lodash-es'
@@ -6,6 +6,24 @@ import {setCurFetched, setCurInfo, setData, setInfos, setUploadedTranscript} fro
 import MoreBtn from './MoreBtn'
 import classNames from 'classnames'
 import {parseTranscript} from '../utils/bizUtil'
+import {useMessage} from '../hooks/useMessageService'
+import {ASR_INFO_ID, isAsrConfigured} from '../utils/asrUtil'
+import {openOptionsPage} from '../utils/chromeUtils'
+import toast from 'react-hot-toast'
+
+const ASR_START_VALUE = 'asr_start'
+
+const formatAsrStatus = (status: AsrStatus) => {
+  let text = status.stage ?? '识别中'
+  if (status.done != null) {
+    if (status.stage === '下载音频') {
+      text += status.total ? ` ${Math.round(status.done * 100 / status.total)}%` : ` ${status.done}KB`
+    } else {
+      text += status.total ? ` ${status.done}/${status.total}` : ` ${status.done}`
+    }
+  }
+  return text
+}
 
 const Header = (props: {
   foldCallback: () => void
@@ -17,6 +35,29 @@ const Header = (props: {
   const fold = useAppSelector(state => state.env.fold)
   const uploadedTranscript = useAppSelector(state => state.env.uploadedTranscript)
   const envData = useAppSelector(state => state.env.envData)
+  const asrStatus = useAppSelector(state => state.env.asrStatus)
+  const {sendInject} = useMessage(!!envData.sidePanel)
+
+  const startAsr = useCallback(() => {
+    if (!isAsrConfigured(envData)) {
+      toast.error('请先在选项页面配置语音识别')
+      openOptionsPage()
+      return
+    }
+    sendInject(null, 'ASR_START', {}).catch((e: any) => toast.error(e?.message ?? String(e)))
+  }, [envData, sendInject])
+
+  const cancelAsr = useCallback((e: any) => {
+    e.stopPropagation()
+    if (confirm('取消语音识别?')) {
+      sendInject(null, 'ASR_CANCEL', {}).catch(console.error)
+    }
+  }, [sendInject])
+
+  const onStartAsr = useCallback((e: any) => {
+    e.stopPropagation()
+    startAsr()
+  }, [startAsr])
 
   const upload = useCallback(() => {
     const input = document.createElement('input')
@@ -55,6 +96,10 @@ const Header = (props: {
       upload()
       return
     }
+    if (e.target.value === ASR_START_VALUE) {
+      startAsr()
+      return
+    }
 
     const tarInfo = find(infos, {subtitle_url: e.target.value})
     if (curInfo?.id !== tarInfo?.id) {
@@ -66,7 +111,7 @@ const Header = (props: {
         dispatch(setCurFetched(false))
       }
     }
-  }, [curInfo?.id, dispatch, infos, upload, uploadedTranscript])
+  }, [curInfo?.id, dispatch, infos, startAsr, upload, uploadedTranscript])
 
   const preventCallback = useCallback((e: any) => {
     e.stopPropagation()
@@ -88,15 +133,22 @@ const Header = (props: {
       <MoreBtn placement={'right-start'}/>
     </div>
     <div className='flex gap-0.5 items-center mr-[16px]'>
-      {(infos == null) || infos.length <= 0
+      {asrStatus != null &&
+        <div className='tooltip tooltip-left text-xs desc flex items-center gap-1' data-tip='点击取消' onClick={cancelAsr}>
+          <AiOutlineLoading3Quarters className='animate-spin'/>
+          {formatAsrStatus(asrStatus)}
+        </div>}
+      {asrStatus == null && ((infos == null) || infos.length <= 0
         ?<div className='text-xs desc'>
-          <button className='btn btn-xs btn-link' onClick={onUpload}>上传(vtt/srt)</button>
           (未找到字幕)
+          <button className='btn btn-xs btn-link' onClick={onStartAsr}>语音识别</button>
+          <button className='btn btn-xs btn-link' onClick={onUpload}>上传(vtt/srt)</button>
       </div>
         :<select disabled={!infos || infos.length <= 0} className='select select-ghost select-xs line-clamp-1' value={curInfo?.subtitle_url} onChange={selectCallback} onClick={preventCallback}>
           {infos?.map((item: any) => <option key={item.id} value={item.subtitle_url}>{item.lan_doc}</option>)}
+          <option key={ASR_START_VALUE} value={ASR_START_VALUE}>{infos.some((item: any) => item.id === ASR_INFO_ID) ? '重新语音识别' : '语音识别'}</option>
           <option key='upload' value='upload'>上传(vtt/srt)</option>
-        </select>}
+        </select>)}
       {!envData.sidePanel && <IoIosArrowUp className={classNames('shrink-0 desc transform ease-in duration-300', fold?'rotate-180':'')}/>}
     </div>
   </div>

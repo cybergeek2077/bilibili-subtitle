@@ -40,6 +40,8 @@ const useTranslate = () => {
   const language = LANGUAGES_MAP[envData.language??LANGUAGE_DEFAULT]
   const summarizeLanguage = LANGUAGES_MAP[envData.summarizeLanguage??SUMMARIZE_LANGUAGE_DEFAULT]
   const title = useAppSelector(state => state.env.title)
+  const desc = useAppSelector(state => state.env.desc)
+  const descText = desc?.trim() ? desc.trim() : '（无）'
   const reviewed = useAppSelector(state => state.env.tempData.reviewed)
   const reviewAction = useAppSelector(state => state.env.reviewAction)
   const reviewActions = useAppSelector(state => state.env.tempData.reviewActions)
@@ -144,7 +146,17 @@ const useTranslate = () => {
       let prompt: string = envData.prompts?.[promptType]??PROMPT_DEFAULTS[promptType]
       // replace params
       prompt = prompt.replaceAll('{{language}}', summarizeLanguage.name)
+      // 按片段长度估算输出规模
+      const minutes = segment.items.length > 0 ? Math.max(1, Math.round((segment.items[segment.items.length - 1].to - segment.items[0].from) / 60)) : 1
+      const count = Math.min(30, Math.max(4, Math.round(minutes / 1.5)))
+      const keypointCount = Math.min(40, Math.max(6, Math.round(minutes * 1.2)))
+      const minWords = Math.min(3000, Math.max(200, Math.round(segment.text.length * 0.15 / 50) * 50))
       prompt = prompt.replaceAll('{{title}}', title??'')
+      prompt = prompt.replaceAll('{{desc}}', descText)
+      prompt = prompt.replaceAll('{{minutes}}', String(minutes))
+      prompt = prompt.replaceAll('{{count}}', String(count))
+      prompt = prompt.replaceAll('{{keypointCount}}', String(keypointCount))
+      prompt = prompt.replaceAll('{{minWords}}', String(minWords))
       prompt = prompt.replaceAll('{{subtitles}}', subtitles)
       prompt = prompt.replaceAll('{{segment}}', segment.text)
 
@@ -176,7 +188,7 @@ const useTranslate = () => {
       const task = await sendExtension(null, 'ADD_TASK', {taskDef})
       dispatch(addTaskId(task.id))
     }
-  }, [dispatch, envData, reviewAction, reviewActions, reviewed, sendExtension, summarizeLanguage.name, title])
+  }, [descText, dispatch, envData, reviewAction, reviewActions, reviewed, sendExtension, summarizeLanguage.name, title])
 
   const addAskTask = useCallback(async (id: string, segment: Segment, question: string) => {
     if (segment.text.length >= SUMMARIZE_THRESHOLD) {
@@ -184,6 +196,7 @@ const useTranslate = () => {
       // replace params
       prompt = prompt.replaceAll('{{language}}', summarizeLanguage.name)
       prompt = prompt.replaceAll('{{title}}', title??'')
+      prompt = prompt.replaceAll('{{desc}}', descText)
       prompt = prompt.replaceAll('{{segment}}', segment.text)
       prompt = prompt.replaceAll('{{question}}', question)
 
@@ -217,7 +230,7 @@ const useTranslate = () => {
       const task = await sendExtension(null, 'ADD_TASK', {taskDef})
       dispatch(addTaskId(task.id))
     }
-  }, [dispatch, envData, sendExtension, summarizeLanguage.name, title])
+  }, [descText, dispatch, envData, sendExtension, summarizeLanguage.name, title])
 
   const handleTranslate = useMemoizedFn((task: Task, content: string) => {
     let map: {[key: string]: string} = {}
@@ -252,12 +265,31 @@ const useTranslate = () => {
 
   const handleSummarize = useMemoizedFn((task: Task, content?: string) => {
     const summaryType = task.def.extra.summaryType
-    content = summaryType === 'brief'?extractJsonObject(content??''):extractJsonArray(content??'')
     let obj
-    try {
-      obj = JSON.parse(content)
-    } catch (e) {
-      task.error = 'failed'
+    if (summaryType === 'brief') {
+      // 总结直接输出 Markdown；兼容旧提示词的 {"summary": "..."}
+      const raw = (content ?? '').trim()
+      let summary = raw.replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n?```$/, '$1').trim()
+      if (raw.startsWith('{') || raw.startsWith('```json')) {
+        try {
+          const json = JSON.parse(extractJsonObject(raw))
+          if (typeof json.summary === 'string') summary = json.summary
+        } catch (e) {
+          console.debug(e)
+        }
+      }
+      if (summary) {
+        obj = { summary }
+      } else {
+        task.error = 'failed'
+      }
+    } else {
+      content = extractJsonArray(content??'')
+      try {
+        obj = JSON.parse(content)
+      } catch (e) {
+        task.error = 'failed'
+      }
     }
 
     dispatch(setSummaryContent({

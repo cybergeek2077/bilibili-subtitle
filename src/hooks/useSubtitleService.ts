@@ -1,5 +1,5 @@
 import {useAppDispatch, useAppSelector} from './redux'
-import {useContext, useEffect} from 'react'
+import {useContext, useEffect, useRef} from 'react'
 import {
   setCurFetched,
   setCurIdx,
@@ -18,6 +18,7 @@ import {getModelMaxTokens, getWholeText} from '../utils/bizUtil'
 import { useMessage } from './useMessageService'
 import { setCurrentTime } from '../redux/currentTimeReducer'
 import { RootState } from '../store'
+import { isAsrConfigured } from '../utils/asrUtil'
 
 /**
  * Service是单例，类似后端的服务概念
@@ -43,6 +44,28 @@ const useSubtitleService = () => {
   const reviewed = useAppSelector(state => state.env.tempData.reviewed)
   const reviewActions = useAppSelector(state => state.env.tempData.reviewActions)
   const {sendInject} = useMessage(!!envData.sidePanel)
+  const url = useAppSelector(state => state.env.url)
+  const asrStatus = useAppSelector(state => state.env.asrStatus)
+  const asrAutoUrlRef = useRef<string>()
+  const officialSummaryStatus = useAppSelector(state => state.env.officialSummary?.status)
+
+  // 有官方 AI 总结时自动展开(没有字幕的视频也能直接看到)
+  useEffect(() => {
+    if (officialSummaryStatus === 'ok' && (envData.autoExpand || envData.sidePanel)) {
+      eventBus.emit({
+        type: EVENT_EXPAND
+      })
+    }
+  }, [envData.autoExpand, envData.sidePanel, eventBus, officialSummaryStatus])
+
+  // 没有字幕时自动语音识别(每个视频只自动触发一次)
+  useEffect(() => {
+    if (envData.asrAuto && isAsrConfigured(envData) && url && infos != null && infos.length === 0 &&
+      asrStatus == null && asrAutoUrlRef.current !== url) {
+      asrAutoUrlRef.current = url
+      sendInject(null, 'ASR_START', {}).catch(console.error)
+    }
+  }, [asrStatus, envData, infos, sendInject, url])
 
   // 如果reviewActions达到15次，则设置reviewed为false
   useEffect(() => {

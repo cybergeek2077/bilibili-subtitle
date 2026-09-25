@@ -14,6 +14,7 @@ import {stopPopFunc} from '../utils/util'
 import useSubtitle from '../hooks/useSubtitle'
 import DebateChat from './DebateChat'
 import { RootState } from '../store'
+import Markdown from './Markdown'
 
 const SummarizeItemOverview = (props: {
   segment: Segment
@@ -105,8 +106,9 @@ const Summarize = (props: {
           {summary.content?.map((keyPoint: string, idx: number) => <li key={idx}>{keyPoint}</li>)}
         </ul>}
       {summary?.type === 'brief' && (summary.content != null) &&
-        <div className={classNames('font-medium max-w-[90%]', fontSize === 'large' ? 'text-sm' : 'text-xs')}>
-          {summary.content.summary}
+        <div className='max-w-[95%] w-full'>
+          <Markdown content={summary.content.summary}
+                    className={classNames('max-w-none prose-headings:mt-3 prose-headings:mb-1 prose-h3:text-[1.05em] prose-p:my-1 prose-ul:my-1 prose-li:my-0', fontSize === 'large' ? 'text-sm' : 'text-xs')}/>
         </div>}
       {summary?.type === 'question' && (summary.content != null) &&
         <div className={classNames('max-w-[90%] flex flex-col gap-1', fontSize === 'large' ? 'text-sm' : 'text-xs')}>

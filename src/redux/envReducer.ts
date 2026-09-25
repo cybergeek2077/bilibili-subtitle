@@ -52,6 +52,14 @@ interface EnvState {
 
   // 当前视频是否计算过操作
   reviewAction: boolean
+
+  // 语音识别进度
+  asrStatus?: AsrStatus
+
+  // 视频简介
+  desc?: string
+  // B站官方 AI 总结
+  officialSummary?: OfficialSummary
 }
 
 const initialState: EnvState = {
@@ -299,6 +307,15 @@ export const slice = createSlice({
     setFold: (state, action: PayloadAction<boolean>) => {
       state.fold = action.payload
     },
+    setAsrStatus: (state, action: PayloadAction<AsrStatus | undefined>) => {
+      state.asrStatus = action.payload
+    },
+    setDesc: (state, action: PayloadAction<string | undefined>) => {
+      state.desc = action.payload
+    },
+    setOfficialSummary: (state, action: PayloadAction<OfficialSummary | undefined>) => {
+      state.officialSummary = action.payload
+    },
     setInputting: (state, action: PayloadAction<boolean>) => {
       state.inputting = action.payload
     },
@@ -345,6 +362,9 @@ export const {
   setSearchText,
   setSearchResult,
   setInputting,
+  setAsrStatus,
+  setDesc,
+  setOfficialSummary,
   addAskInfo,
   delAskInfo,
   mergeAskInfo,

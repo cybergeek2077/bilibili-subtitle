@@ -20,10 +20,14 @@ export default defineManifest(async (env) => ({
   "permissions": [
     "sidePanel",
     "storage",
+    "unlimitedStorage",
   ],
   "host_permissions": [
     "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    // 语音识别服务地址由用户配置，需要跨域访问
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "src/chrome/background.ts",

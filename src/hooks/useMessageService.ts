@@ -1,4 +1,7 @@
-import { setAuthor, setChapters, setCtime, setCurFetched, setCurInfo, setData, setInfos, setTitle, setUrl } from '@/redux/envReducer'
+import { setAsrStatus, setDesc, setOfficialSummary, setAuthor, setChapters, setCtime, setCurFetched, setCurInfo, setData, setInfos, setTitle, setUrl } from '@/redux/envReducer'
+import { ASR_INFO_ID } from '@/utils/asrUtil'
+import store from '@/store'
+import toast from 'react-hot-toast'
 import { useAppDispatch, useAppSelector } from './redux'
 import { AllAPPMessages, AllExtensionMessages, AllInjectMessages } from '@/message-typings'
 import { useMessaging, useMessagingService } from '../message'
@@ -25,7 +28,28 @@ const useMessageService = () => {
       dispatch(setTitle(params.title))
       dispatch(setCtime(params.ctime))
       dispatch(setAuthor(params.author))
+      dispatch(setDesc(params.desc))
+      dispatch(setOfficialSummary(undefined))
       console.debug('video title: ', params.title)
+    },
+    SET_OFFICIAL_SUMMARY: async (params, context: MethodContext) => {
+      dispatch(setOfficialSummary(params.result))
+    },
+    ASR_PROGRESS: async (params, context: MethodContext) => {
+      const { status } = params
+      dispatch(setAsrStatus(status.status === 'running' ? status : undefined))
+      if (status.status === 'error') {
+        toast.error('语音识别失败: ' + (status.message ?? ''))
+      }
+    },
+    ASR_DONE: async (params, context: MethodContext) => {
+      const infos = (store.getState().env.infos ?? []).filter((item: any) => item.id !== ASR_INFO_ID)
+      infos.push(params.info)
+      dispatch(setInfos(infos))
+      dispatch(setCurInfo(params.info))
+      dispatch(setCurFetched(false))
+      dispatch(setData(undefined))
+      toast.success('语音识别完成')
     },
   }))
 

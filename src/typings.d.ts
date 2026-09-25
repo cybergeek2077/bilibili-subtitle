@@ -43,6 +43,65 @@ interface EnvData {
   prompts?: {
     [key: string]: string
   }
+
+  // 语音识别(无字幕时从音频生成字幕)
+  asrProtocol?: AsrProtocol
+  asrServerUrl?: string
+  asrApiKey?: string
+  asrModel?: string
+  asrLanguage?: string // 空表示自动
+  asrPrompt?: string // 支持 {{title}}
+  asrTimestamps?: boolean // 请求 verbose_json 分句时间戳(仅 transcriptions 协议)
+  asrExtraBody?: string // 额外请求参数(JSON)
+  asrChunkSeconds?: number
+  asrConcurrency?: number
+  asrAuto?: boolean // 无字幕时自动识别
+}
+
+/**
+ * transcriptions: OpenAI 兼容的 /audio/transcriptions(Whisper、硅基流动 SenseVoice、Groq、本地服务等)
+ * chat: OpenAI 兼容的 /chat/completions + input_audio(阿里百炼 qwen3-asr-flash、gpt-4o-audio 等)
+ */
+type AsrProtocol = 'transcriptions' | 'chat'
+
+interface AsrConfig {
+  protocol: AsrProtocol
+  serverUrl: string
+  apiKey?: string
+  model: string
+  language?: string
+  prompt?: string
+  timestamps?: boolean
+  extraBody?: string
+  chunkSeconds: number
+  concurrency: number
+}
+
+interface AsrResult {
+  text: string
+  segments?: Array<{ start: number, end: number, text: string }>
+}
+
+/**
+ * B站官方 AI 总结
+ */
+interface OfficialSummary {
+  status: 'ok' | 'none' | 'unlogin' | 'error'
+  message?: string
+  summary?: string
+  outline?: Array<{
+    title: string
+    timestamp: number
+    points: Array<{ content: string, timestamp: number }>
+  }>
+}
+
+interface AsrStatus {
+  status: 'running' | 'done' | 'error' | 'cancelled'
+  stage?: string // 当前阶段描述
+  done?: number
+  total?: number
+  message?: string
 }
 
 interface TempData {

@@ -3,6 +3,11 @@ import {setEnvData} from '../redux/envReducer'
 import {useAppDispatch, useAppSelector} from '../hooks/redux'
 import {
   ASK_ENABLED_DEFAULT,
+  ASR_CHUNK_SECONDS_DEFAULT,
+  ASR_CONCURRENCY_DEFAULT,
+  ASR_LANGUAGE_DEFAULT,
+  ASR_LANGUAGES,
+  ASR_PRESETS,
   CUSTOM_MODEL_TOKENS,
   DEFAULT_SERVER_URL_GEMINI,
   DEFAULT_SERVER_URL_OPENAI,
@@ -28,6 +33,7 @@ import {useBoolean, useEventTarget} from 'ahooks'
 import { FaChevronDown, FaChevronUp, FaGripfire } from 'react-icons/fa'
 import { useMessage } from '@/hooks/useMessageService'
 import useEventChecked from '@/hooks/useEventChecked'
+import { bytesToBase64, encodeWav, ASR_SAMPLE_RATE } from '@/utils/audioUtil'
 
 const OptionCard = ({ title, children, defaultExpanded = true }: { title: React.ReactNode, children: React.ReactNode, defaultExpanded?: boolean }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
@@ -93,6 +99,61 @@ const OptionsPage = () => {
   const [fetchAmountValue, setFetchAmountValue] = useState(envData.fetchAmount??TRANSLATE_FETCH_DEFAULT)
   const [promptsFold, {toggle: togglePromptsFold}] = useBoolean(true)
   const [promptsValue, setPromptsValue] = useState<{[key: string]: string}>(envData.prompts??{})
+  const [asrProtocolValue, setAsrProtocolValue] = useState<AsrProtocol>(envData.asrProtocol ?? 'transcriptions')
+  const [asrServerUrlValue, setAsrServerUrlValue] = useState(envData.asrServerUrl ?? '')
+  const [asrApiKeyValue, setAsrApiKeyValue] = useState(envData.asrApiKey ?? '')
+  const [asrModelValue, setAsrModelValue] = useState(envData.asrModel ?? '')
+  const [asrLanguageValue, setAsrLanguageValue] = useState(envData.asrLanguage ?? ASR_LANGUAGE_DEFAULT)
+  const [asrPromptValue, setAsrPromptValue] = useState(envData.asrPrompt ?? '')
+  const [asrTimestampsValue, setAsrTimestampsValue] = useState(!!envData.asrTimestamps)
+  const [asrExtraBodyValue, setAsrExtraBodyValue] = useState(envData.asrExtraBody ?? '')
+  const [asrChunkSecondsValue, setAsrChunkSecondsValue] = useState<number | undefined>(envData.asrChunkSeconds)
+  const [asrConcurrencyValue, setAsrConcurrencyValue] = useState<number | undefined>(envData.asrConcurrency)
+  const {value: asrAutoValue, onChange: setAsrAutoValue} = useEventChecked(envData.asrAuto)
+  const [asrKeyUrl, setAsrKeyUrl] = useState<string>()
+  const [asrTesting, setAsrTesting] = useState(false)
+
+  const applyAsrPreset = useCallback((preset: typeof ASR_PRESETS[number]) => {
+    setAsrProtocolValue(preset.protocol)
+    setAsrServerUrlValue(preset.serverUrl)
+    setAsrModelValue(preset.model)
+    setAsrTimestampsValue(preset.timestamps)
+    setAsrChunkSecondsValue(preset.chunkSeconds)
+    setAsrConcurrencyValue(preset.concurrency)
+    setAsrPromptValue(preset.prompt ?? '')
+    setAsrExtraBodyValue(preset.extraBody ?? '')
+    setAsrKeyUrl(preset.keyUrl)
+  }, [])
+
+  const onTestAsr = useCallback(() => {
+    if (!asrServerUrlValue || !asrModelValue) {
+      toast.error('请填写服务器和模型')
+      return
+    }
+    setAsrTesting(true)
+    // 1 秒静音，只验证地址、密钥和模型是否可用
+    const audio = bytesToBase64(encodeWav(new Int16Array(ASR_SAMPLE_RATE)))
+    sendExtension(null, 'ASR_TRANSCRIBE', {
+      config: {
+        protocol: asrProtocolValue,
+        serverUrl: asrServerUrlValue.trim(),
+        apiKey: asrApiKeyValue.trim(),
+        model: asrModelValue.trim(),
+        language: asrLanguageValue,
+        timestamps: asrTimestampsValue,
+        extraBody: asrExtraBodyValue,
+        chunkSeconds: ASR_CHUNK_SECONDS_DEFAULT,
+        concurrency: 1,
+      },
+      audio,
+    }).then(() => {
+      toast.success('连接成功')
+    }).catch((e: any) => {
+      toast.error('连接失败: ' + (e?.message ?? String(e)), { duration: 8000 })
+    }).finally(() => {
+      setAsrTesting(false)
+    })
+  }, [asrApiKeyValue, asrExtraBodyValue, asrLanguageValue, asrModelValue, asrProtocolValue, asrServerUrlValue, asrTimestampsValue, sendExtension])
   // const wordsList = useMemo(() => {
   //   const list = []
   //   for (let i = WORDS_MIN; i <= WORDS_MAX; i += WORDS_STEP) {
@@ -141,6 +202,17 @@ const OptionsPage = () => {
       cnSearchEnabled: cnSearchEnabledValue,
       askEnabled: askEnabledValue,
       chapterMode: chapterModeValue,
+      asrProtocol: asrProtocolValue,
+      asrServerUrl: asrServerUrlValue.trim(),
+      asrApiKey: asrApiKeyValue.trim(),
+      asrModel: asrModelValue.trim(),
+      asrLanguage: asrLanguageValue,
+      asrPrompt: asrPromptValue,
+      asrTimestamps: asrTimestampsValue,
+      asrExtraBody: asrExtraBodyValue,
+      asrChunkSeconds: asrChunkSecondsValue,
+      asrConcurrency: asrConcurrencyValue,
+      asrAuto: asrAutoValue,
     }))
     toast.success('保存成功')
     sendExtension(null, 'CLOSE_SIDE_PANEL')
@@ -148,7 +220,7 @@ const OptionsPage = () => {
     setTimeout(() => {
       window.close()
     }, 3000)
-  }, [dispatch, sendExtension, sidePanelValue, autoInsertValue, autoExpandValue, apiKeyValue, serverUrlValue, modelValue, customModelValue, customModelTokensValue, translateEnableValue, languageValue, hideOnDisableAutoTranslateValue, themeValue, transDisplayValue, summarizeEnableValue, summarizeFloatValue, summarizeLanguageValue, wordsValue, fetchAmountValue, fontSizeValue, promptsValue, searchEnabledValue, cnSearchEnabledValue, askEnabledValue, chapterModeValue])
+  }, [dispatch, sendExtension, sidePanelValue, autoInsertValue, autoExpandValue, apiKeyValue, serverUrlValue, modelValue, customModelValue, customModelTokensValue, translateEnableValue, languageValue, hideOnDisableAutoTranslateValue, themeValue, transDisplayValue, summarizeEnableValue, summarizeFloatValue, summarizeLanguageValue, wordsValue, fetchAmountValue, fontSizeValue, promptsValue, searchEnabledValue, cnSearchEnabledValue, askEnabledValue, chapterModeValue, asrProtocolValue, asrServerUrlValue, asrApiKeyValue, asrModelValue, asrLanguageValue, asrPromptValue, asrTimestampsValue, asrExtraBodyValue, asrChunkSecondsValue, asrConcurrencyValue, asrAutoValue])
 
   const onCancel = useCallback(() => {
     window.close()
@@ -282,6 +354,69 @@ const OptionsPage = () => {
                  value={customModelTokensValue}
                  onChange={e => setCustomModelTokensValue(e.target.value ? parseInt(e.target.value) : undefined)}/>
         </FormItem>}
+      </OptionCard>
+
+      <OptionCard title="语音识别配置">
+        <div className='desc text-sm mb-3'>视频没有字幕时，下载音频并识别生成字幕，之后可正常总结、翻译。识别结果会缓存，同一视频不重复识别。</div>
+        <FormItem title='快速填充'>
+          <div className='flex flex-wrap gap-1'>
+            {ASR_PRESETS.map(preset => <button key={preset.name} className='btn btn-xs' title={preset.desc}
+                                               onClick={() => applyAsrPreset(preset)}>{preset.name}</button>)}
+          </div>
+        </FormItem>
+        {asrKeyUrl && <div className='desc text-sm text-center mb-2'>获取密钥：<a className='link link-primary' href={asrKeyUrl} target='_blank' rel='noreferrer'>{asrKeyUrl}</a></div>}
+        <FormItem title='接口协议' tip='transcriptions: /audio/transcriptions(Whisper 类)；chat: /chat/completions 音频输入(qwen3-asr 等)'>
+          <select className='select select-sm select-bordered' value={asrProtocolValue} onChange={e => setAsrProtocolValue(e.target.value as AsrProtocol)}>
+            <option value='transcriptions'>OpenAI 语音转写 (/audio/transcriptions)</option>
+            <option value='chat'>OpenAI 对话音频输入 (/chat/completions)</option>
+          </select>
+        </FormItem>
+        <FormItem title='服务器' htmlFor='asrServerUrl'>
+          <input id='asrServerUrl' type='text' className='input input-sm input-bordered w-full' placeholder='https://api.openai.com/v1'
+                 value={asrServerUrlValue} onChange={e => setAsrServerUrlValue(e.target.value)}/>
+        </FormItem>
+        <FormItem title='ApiKey' htmlFor='asrApiKey' tip='本地服务可留空'>
+          <input id='asrApiKey' type='password' className='input input-sm input-bordered w-full' placeholder='sk-xxx'
+                 value={asrApiKeyValue} onChange={e => setAsrApiKeyValue(e.target.value)}/>
+        </FormItem>
+        <FormItem title='模型' htmlFor='asrModel'>
+          <input id='asrModel' type='text' className='input input-sm input-bordered w-full' placeholder='whisper-1'
+                 value={asrModelValue} onChange={e => setAsrModelValue(e.target.value)}/>
+        </FormItem>
+        <FormItem title='语言'>
+          <select className='select select-sm select-bordered' value={asrLanguageValue} onChange={e => setAsrLanguageValue(e.target.value)}>
+            {ASR_LANGUAGES.map(language => <option key={language.code} value={language.code}>{language.name}</option>)}
+          </select>
+        </FormItem>
+        <FormItem title='提示词' htmlFor='asrPrompt' tip='帮助识别专有名词，{{title}} 会替换成视频标题'>
+          <input id='asrPrompt' type='text' className='input input-sm input-bordered w-full' placeholder='视频标题：{{title}}'
+                 value={asrPromptValue} onChange={e => setAsrPromptValue(e.target.value)}/>
+        </FormItem>
+        {asrProtocolValue === 'transcriptions' && <FormItem title='分句时间戳' htmlFor='asrTimestamps' tip='请求 verbose_json 获取每句时间(Whisper 支持)；不支持的服务按字数估算时间'>
+          <input id='asrTimestamps' type='checkbox' className='toggle toggle-primary' checked={asrTimestampsValue}
+                 onChange={e => setAsrTimestampsValue(e.target.checked)}/>
+        </FormItem>}
+        <FormItem title='分段时长(秒)' htmlFor='asrChunkSeconds' tip='音频按静音切成不超过该时长的段分别识别；越短时间越准，请求越多'>
+          <input id='asrChunkSeconds' type='number' min={5} max={600} className='input input-sm input-bordered w-full'
+                 placeholder={'' + ASR_CHUNK_SECONDS_DEFAULT} value={asrChunkSecondsValue ?? ''}
+                 onChange={e => setAsrChunkSecondsValue(e.target.value ? parseInt(e.target.value) : undefined)}/>
+        </FormItem>
+        <FormItem title='并发数' htmlFor='asrConcurrency'>
+          <input id='asrConcurrency' type='number' min={1} max={20} className='input input-sm input-bordered w-full'
+                 placeholder={'' + ASR_CONCURRENCY_DEFAULT} value={asrConcurrencyValue ?? ''}
+                 onChange={e => setAsrConcurrencyValue(e.target.value ? parseInt(e.target.value) : undefined)}/>
+        </FormItem>
+        <FormItem title='额外参数' htmlFor='asrExtraBody' tip='JSON，合并进请求体'>
+          <input id='asrExtraBody' type='text' className='input input-sm input-bordered w-full font-mono' placeholder='{"temperature": 0}'
+                 value={asrExtraBodyValue} onChange={e => setAsrExtraBodyValue(e.target.value)}/>
+        </FormItem>
+        <FormItem title='自动识别' htmlFor='asrAuto' tip='视频没有字幕时自动开始识别(会产生费用)'>
+          <input id='asrAuto' type='checkbox' className='toggle toggle-primary' checked={asrAutoValue}
+                 onChange={setAsrAutoValue}/>
+        </FormItem>
+        <div className='flex justify-center'>
+          <button className='btn btn-sm' disabled={asrTesting} onClick={onTestAsr}>{asrTesting ? '测试中...' : '测试连接'}</button>
+        </div>
       </OptionCard>
 
       <OptionCard title={<div className='flex items-center'>

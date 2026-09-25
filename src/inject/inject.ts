@@ -1,6 +1,9 @@
 import { TOTAL_HEIGHT_DEF, HEADER_HEIGHT, TOTAL_HEIGHT_MIN, TOTAL_HEIGHT_MAX, IFRAME_ID, STORAGE_ENV, DEFAULT_USE_PORT } from '@/consts/const'
 import { AllExtensionMessages, AllInjectMessages, AllAPPMessages } from '@/message-typings'
 import { InjectMessaging } from '../message'
+import { AsrJob, runAsrJob } from './asr'
+import { ASR_URL_PREFIX, buildAsrInfo, getAsrCacheKey, getAsrConfig, isAsrConfigured } from '@/utils/asrUtil'
+import { signWbi } from '@/utils/wbi'
 
 const debug = (...args: any[]) => {
   console.debug('[Inject]', ...args)
@@ -41,6 +44,8 @@ const debug = (...args: any[]) => {
 
     showTrans: boolean
     curTrans?: string
+
+    asrJob?: AsrJob
   } = {
     injectMessaging: new InjectMessaging(DEFAULT_USE_PORT),
     fold: true,
@@ -124,8 +129,26 @@ const debug = (...args: any[]) => {
   let ctime: number | null = null
   let author: string | undefined
   let title = ''
+  let bvid = ''
+  let desc = ''
+  let upMid: number | undefined
   let pages: any[] = []
   let pagesMap: Record<string, any> = {}
+
+  /**
+   * 有语音识别缓存时，把「语音识别」加到字幕列表末尾
+   */
+  const appendAsrInfo = async (subtitles: any[] | undefined, aid: number | null, cid: number | string | undefined | null) => {
+    const list = [...(subtitles ?? [])]
+    if (aid && cid) {
+      const key = getAsrCacheKey(aid, cid)
+      const cache = await chrome.storage.local.get(key)
+      if (cache[key] != null) {
+        list.push(buildAsrInfo(aid, cid))
+      }
+    }
+    return list
+  }
 
   let lastAidOrBvid: string | null = null
   const refreshVideoInfo = async (force: boolean = false) => {
@@ -184,6 +207,11 @@ const debug = (...args: any[]) => {
           ctime = pages[0].ctime
           author = pages[0].owner?.name
           title = pages[0].part
+          await fetch(`https://api.bilibili.com/x/web-interface/view?aid=${aid}`, { credentials: 'include' }).then(async res => await res.json()).then(res => {
+            bvid = res.data?.bvid ?? ''
+            desc = res.data?.desc ?? ''
+            upMid = res.data?.owner?.mid
+          })
           await fetch(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid!}`, { credentials: 'include' }).then(async res => await res.json()).then(res => {
             chapters = res.data.view_points ?? []
             subtitles = res.data.subtitle.subtitles
@@ -196,6 +224,9 @@ const debug = (...args: any[]) => {
             ctime = res.data.ctime
             author = res.data.owner?.name
             pages = res.data.pages
+            bvid = res.data.bvid
+            desc = res.data.desc ?? ''
+            upMid = res.data.owner?.mid
           })
           await fetch(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid!}&cid=${cid!}`, { credentials: 'include' }).then(async res => await res.json()).then(res => {
             chapters = res.data.view_points ?? []
@@ -212,6 +243,8 @@ const debug = (...args: any[]) => {
           pagesMap[page.page + ''] = page
         })
 
+        subtitles = await appendAsrInfo(subtitles, aid, cid)
+
         debug('refreshVideoInfo: ', aid, cid, pages, subtitles)
 
         // send setVideoInfo
@@ -224,8 +257,45 @@ const debug = (...args: any[]) => {
           pages,
           chapters,
           infos: subtitles,
+          desc: desc === '-' ? '' : desc,
         })
       }
+    }
+  }
+
+  /**
+   * B站官方 AI 总结(需要登录)
+   */
+  const fetchOfficialSummary = async (cid: number) => {
+    let result: OfficialSummary
+    try {
+      const query = await signWbi({ bvid, cid, up_mid: upMid ?? '' })
+      const res = await fetch(`https://api.bilibili.com/x/web-interface/view/conclusion/get?${query}`, { credentials: 'include' }).then(async res => await res.json())
+      const modelResult = res.data?.model_result
+      if (res.code === -101) {
+        result = { status: 'unlogin' }
+      } else if (res.code !== 0) {
+        result = { status: 'error', message: `${res.code as string} ${res.message as string}` }
+      } else if (res.data?.code === 0 && (modelResult?.summary || modelResult?.outline?.length > 0)) {
+        result = {
+          status: 'ok',
+          summary: modelResult.summary ?? '',
+          outline: (modelResult.outline ?? []).map((o: any) => ({
+            title: o.title,
+            timestamp: o.timestamp,
+            points: (o.part_outline ?? []).map((p: any) => ({ content: p.content, timestamp: p.timestamp })),
+          })),
+        }
+      } else {
+        result = { status: 'none' }
+      }
+    } catch (e: any) {
+      result = { status: 'error', message: e?.message ?? String(e) }
+    }
+    debug('officialSummary', cid, result)
+    // 期间切换了分P则丢弃
+    if (cid === lastCid) {
+      runtime.injectMessaging.sendApp(!!sidePanel, 'SET_OFFICIAL_SUMMARY', { result }).catch(console.error)
     }
   }
 
@@ -248,17 +318,20 @@ const debug = (...args: any[]) => {
 
       lastAid = aid
       lastCid = cid
+      if (bvid && cid) {
+        fetchOfficialSummary(cid).catch(console.error)
+      }
       if (aid && cid) {
         fetch(`https://api.bilibili.com/x/player/wbi/v2?aid=${aid}&cid=${cid}`, {
           credentials: 'include',
         })
           .then(async res => await res.json())
-          .then(res => {
+          .then(async res => {
             // remove elements with empty subtitle_url
-            res.data.subtitle.subtitles = res.data.subtitle.subtitles.filter((item: any) => item.subtitle_url)
-            if (res.data.subtitle.subtitles.length > 0) {
+            const subtitles = await appendAsrInfo(res.data.subtitle.subtitles.filter((item: any) => item.subtitle_url), aid, cid)
+            if (subtitles.length > 0) {
               runtime.injectMessaging.sendApp(!!sidePanel, 'SET_INFOS', {
-                infos: res.data.subtitle.subtitles
+                infos: subtitles
               })
             }
           })
@@ -271,6 +344,66 @@ const debug = (...args: any[]) => {
     if (iframe != null) {
       iframe.style.height = (runtime.fold ? HEADER_HEIGHT : runtime.videoElementHeight) + 'px'
     }
+  }
+
+  const asrMethods = {
+    ASR_START: async () => {
+      if (runtime.asrJob != null && !runtime.asrJob.cancelled) {
+        throw new Error('正在识别中')
+      }
+      const envDataStr = (await chrome.storage.sync.get(STORAGE_ENV))[STORAGE_ENV]
+      const envData: EnvData = envDataStr ? JSON.parse(envDataStr) : {}
+      if (!isAsrConfigured(envData)) {
+        throw new Error('请先在选项页面配置语音识别')
+      }
+      const p = new URLSearchParams(window.location.search).get('p') ?? '1'
+      const page = pagesMap[p] ?? pages[0]
+      if (!aid || !page?.cid) {
+        throw new Error('未获取到视频信息')
+      }
+      const job: AsrJob = {
+        aid,
+        cid: page.cid,
+        title: pages.length > 1 && page.part ? `${title} ${page.part as string}` : title,
+        config: getAsrConfig(envData),
+        cancelled: false,
+      }
+      runtime.asrJob = job
+      const sendProgress = (status: AsrStatus) => {
+        runtime.injectMessaging.sendApp(!!sidePanel, 'ASR_PROGRESS', { status }).catch(console.error)
+      }
+
+      runAsrJob(job, {
+        onProgress: sendProgress,
+        transcribe: async (audio, prompt) => await runtime.injectMessaging.sendExtension('ASR_TRANSCRIBE', {
+          config: job.config,
+          audio,
+          prompt,
+        }),
+      }).then(async transcript => {
+        const createdAt = Date.now()
+        await chrome.storage.local.set({
+          [getAsrCacheKey(job.aid, job.cid)]: { ...transcript, createdAt, model: job.config.model },
+        })
+        sendProgress({ status: 'done' })
+        // 用户没切走才切换到识别结果
+        if (aid === job.aid && lastCid === job.cid) {
+          runtime.injectMessaging.sendApp(!!sidePanel, 'ASR_DONE', { info: buildAsrInfo(job.aid, job.cid) }).catch(console.error)
+        }
+      }).catch(e => {
+        console.error('[ASR]', e)
+        sendProgress(job.cancelled ? { status: 'cancelled' } : { status: 'error', message: e?.message ?? String(e) })
+      }).finally(() => {
+        if (runtime.asrJob === job) {
+          runtime.asrJob = undefined
+        }
+      })
+    },
+    ASR_CANCEL: async () => {
+      if (runtime.asrJob != null) {
+        runtime.asrJob.cancelled = true
+      }
+    },
   }
 
   const methods: {
@@ -302,6 +435,11 @@ const debug = (...args: any[]) => {
     },
     GET_SUBTITLE: async (params) => {
       let url = params.info.subtitle_url
+      if (url.startsWith(ASR_URL_PREFIX)) {
+        const [aid_, cid_] = url.slice(ASR_URL_PREFIX.length).split('/')
+        const key = getAsrCacheKey(aid_, cid_)
+        return (await chrome.storage.local.get(key))[key]
+      }
       if (url.startsWith('http://')) {
         url = url.replace('http://', 'https://')
       }
@@ -386,6 +524,7 @@ const debug = (...args: any[]) => {
         a.click()
       })
     },
+    ...asrMethods,
   }
 
   // 初始化injectMessage

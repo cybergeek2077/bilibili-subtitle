@@ -3,6 +3,7 @@ import {handleTask, initTaskService, tasksMap} from './taskService'
 import { DEFAULT_USE_PORT, STORAGE_ENV} from '@/consts/const'
 import { AllExtensionMessages } from '@/message-typings'
 import { ExtensionMessaging, TAG_TARGET_INJECT } from '../message'
+import { transcribe } from './asrService'
 
 const setBadgeOk = async (tabId: number, ok: boolean) => {
   await chrome.action.setBadgeText({
@@ -75,6 +76,9 @@ const methods: {
   },
   SHOW_FLAG: async (params, context) => {
     await setBadgeOk(context.tabId!, params.show)
+  },
+  ASR_TRANSCRIBE: async (params, context) => {
+    return await transcribe(params.config, params.audio, params.prompt)
   },
 }
 // 初始化backgroundMessage

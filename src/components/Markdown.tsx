@@ -19,11 +19,12 @@ function CopyBtn(props: {
 function Markdown(props: {
   content: string
   codeBlockClass?: string
+  className?: string
 }) {
-  const {content, codeBlockClass} = props
+  const {content, codeBlockClass, className} = props
 
   return <ReactMarkdown
-    className='markdown prose prose-sm dark:prose-invert prose-h1:text-center prose-h1:font-bold prose-h1:underline-offset-4 overflow-y-auto scrollbar-hide'
+    className={classNames('markdown prose prose-sm dark:prose-invert prose-h1:text-center prose-h1:font-bold prose-h1:underline-offset-4 overflow-y-auto scrollbar-hide', className)}
     linkTarget={'_blank'}
     components={{
       code({node, inline, className, children, ...props}) {

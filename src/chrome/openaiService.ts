@@ -1,6 +1,6 @@
 import {DEFAULT_SERVER_URL_OPENAI} from '../consts/const'
 
-const getServerUrl = (serverUrl?: string) => {
+export const getServerUrl = (serverUrl?: string) => {
   if (!serverUrl) {
     return DEFAULT_SERVER_URL_OPENAI
   }
@@ -30,9 +30,12 @@ export const handleChatCompleteTask = async (task: Task) => {
     body: JSON.stringify(data),
   })
   task.resp = await resp.json()
-  if (task.resp.usage) {
-    return (task.resp.usage.total_tokens??0) > 0
+  // 部分 OpenAI 兼容服务不返回 usage，以 choices 为准
+  if (task.resp.choices?.length > 0) {
+    return true
+  } else if (task.resp.error != null) {
+    throw new Error(`${task.resp.error.code as string ?? ''} ${task.resp.error.message as string ?? ''}`)
   } else {
-    throw new Error(`${task.resp.error.code as string??''} ${task.resp.error.message as string ??''}`)
+    throw new Error(`请求失败(${resp.status}): ${JSON.stringify(task.resp).slice(0, 200)}`)
   }
 }
