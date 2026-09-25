@@ -10,6 +10,7 @@ fork 自 [IndieKKY/bilibili-subtitle](https://github.com/IndieKKY/bilibili-subti
 - 没有分句时间戳的接口，按字数在每段内估算时间（段长默认 30 秒）
 - B站官方 AI 总结：登录状态下自动获取（`view/conclusion/get`，WBI 签名），显示在列表顶部，提纲时间点可点击跳转
 - 总结提示词改为中文，加入视频简介（`{{desc}}`），篇幅按视频时长缩放；「总结」输出分节的 Markdown 详细总结
+- 下载：[Releases](https://github.com/cybergeek2077/bilibili-subtitle/releases/latest) 里的 zip，解压后在扩展管理页开启开发者模式，「加载已解压的扩展程序」选择解压出的文件夹
 - 构建：`pnpm install && pnpm build`，在扩展管理页开启开发者模式，「加载已解压的扩展程序」选择 `dist` 目录
 
 ## ⚠️维护说明
